@@ -1,58 +1,57 @@
-# Sobre
-Estava cansado de anúncios e o ani-cli não tinha conteúdo em portuguẽs brasileiro então fiz essa ferramenta de CLI.
-Para ver mangás veja ![manga-tupi](https://github.com/manga-tupi)
+# Ani-Tupi: Veja animes sem sair do terminal
 
-# Youtube Demo
-[![Demo](https://img.youtube.com/vi/eug6gKLTD3I/maxresdefault.jpg)](https://youtu.be/eug6gKLTD3I)
+Assista e baixe animes diretamente pelo terminal utilizando ani-tupi, uma solução brasileira para resolver o problema de legendas em inglês propostos pelo `ani-cli` e os anúncios frequêntes em sites gratuitos de anime.
 
-# Requisitos
-mpv, firefox, python, venv, git
+## Observações:
+- Esse repositório é um fork
+- Os tutoriais inferem que você está usando **linux** e que tem uma pasta chamada **repos** na pasta raíz do seu usuário, em futuras atualizações trarei suporte para **windows**
 
-## Dependências no windows
-Recomendamos o uso do gerenciador de pacotes para windows [Cholatey](https://chocolatey.org/install).
-Para instalar o mpv no windows, execute o comando abaixo no powershell como administrador após instalar chocolatey.
-```powershell
-choco install mpvio.install
+## Compilando o programa
+
+### Pacotes necessários
+- Arch linux e derivados:
+```sh
+sudo pacman -S git python mpv firefox --needed
 ```
 
-# Release
-Basta dar direito de execução a release mais atual e usar.
-```bash
-chmod +x ./ani-tupi
+- Debian e derivados:
+```sh
+sudo apt install git python3 mpv firefox
 ```
 
-# Buildar do código-fonte
-Clone o repositório e execute os seguintes comandos.
+### Comando completo de compilação:
 
-## Instalando python, pip e venv (Ubuntu)
-```
-sudo apt install python-is-python3 pip python3.12-venv
-```
+Muita atenção aqui, pois isso vai depender do shell que está usando
 
-## Linux
-```bash
-git clone https://github.com/eduardonery1/ani-tupi
+- bash/zsh:
+```sh
+cd ~/repos/
+git clone https://github.com/luisantony103/ani-tupi
 cd ani-tupi
-python3 -m venv venv
+python -m venv .venv
 source ./venv/bin/activate
-pip3 install -r requirements.txt
+pip install -r requirements.txt
+./build.sh
+```
+- fish:
+```sh
+cd ~/repos/
+git clone https://github.com/luisantony103/ani-tupi
+cd ani-tupi
+python -m venv .venv
+source ./venv/bin/activate.fish
+pip install -r requirements.txt
 ./build.sh
 ```
 
-## Windows (Powershell)
-```powershell
-git clone https://github.com/eduardonery1/ani-tupi
-cd ani-tupi
-python -m venv venv
-venv/Scripts/activate.ps1
-pip install -r requirements.txt
-pip install windows-curses
-pyinstaller --onefile main.py -n ani-tupi --hidden-import plugins/animefire.py
-```
-Depois, adicione o diretório dist que foi gerado pelo pyinstaller a variável de sistema PATH. Reinicie seu terminal. 
+você vai encontrar o executável em `./dist/ani-tupi`, caso ache pertinente pode deixar nos diretórios que estão listados no `$PATH`, como por exemplo:
 
-# Usar
-Basta usar agora.
-```bash
-ani-tupi
+```sh
+sudo mv ./dist/ani-tupi /usr/local/bin
 ```
+
+
+
+## Repositório fork de:
+[eduardonery1/ani-tupi](https://github.com/eduardonery1/ani-tupi)
+

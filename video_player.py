@@ -1,11 +1,10 @@
 import subprocess
 from sys import exit
 
-
 def play_video(url: str, debug=False) -> None:
     try:
         if not debug:
-            process = subprocess.run(["mpv", url, "--fullscreen", "--cursor-autohide-fs-only", "--log-file=log.txt"]
+            process = subprocess.run(["mpv", url, "--fullscreen", "--cursor-autohide-fs-only", "--quiet"]
                                     , stdout=subprocess.PIPE
                                      , stdin=subprocess.PIPE)
     except FileNotFoundError:

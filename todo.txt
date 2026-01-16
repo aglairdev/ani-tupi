@@ -5,7 +5,6 @@ gemini or llama for recommendation system
 add manga-tupi
 improve model with Cython
 
-
 user <-> TUI (view) <- controler (main) <- model (repository) <-> plugins (scrapers or api)
 (MVCP)
 

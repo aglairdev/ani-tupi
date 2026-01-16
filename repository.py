@@ -44,7 +44,7 @@ class Repository:
         This method assumes that different seasons are different anime, like MAL, so plugin devs should take scrape that way.
         """
         title_ = title.lower()
-        table = {"clássico": "", 
+        table = {"clássico": "",
                  "classico": "", 
                  ":":"", 
                  "part":"season", 
@@ -66,7 +66,13 @@ class Repository:
         self.anime_to_urls[title].append((url, source, params))
 
     def get_anime_titles(self) -> list[str]:
-        return sorted(list(self.anime_to_urls.keys()))
+        resultado = list({
+            f"{anime} - {source}"
+            for anime, entradas in self.anime_to_urls.items()
+            for _, source, _ in entradas
+        })
+
+        return sorted(resultado)
     
     def search_episodes(self, anime: str) -> None:
         if anime in self.anime_episodes_titles:
