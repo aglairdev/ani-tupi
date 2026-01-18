@@ -1,76 +1,121 @@
-import loader
-import argparse
+import loader, argparse
 from menu import menu
 from repository import rep
 from loader import PluginInterface
 from sys import exit
-from video_player import play_video
-from json import load, dump
+from json import load, dump, JSONDecodeError
 from manga_tupi import main as manga_tupi
 from os import name
 from pathlib import Path
-import shutil
-import subprocess
-import requests
+import shutil, requests
+import subprocess, time
 import ui_system
+from video_player import MPV
 
+def seconds_to_hms(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+# Exemplo
 
 HISTORY_PATH = Path.home().as_posix() + "/.local/state/ani-tupi/" if name != 'nt' else "C:\\Program Files\\ani-tupi\\"
 
-def main(args):
+def player_log_handler(text : str) -> None:
+    ui_system.print_log(args, "DEBUG", "gray")
+
+def main(args : argparse.Namespace) -> None:
     loader.load_plugins({"pt-br"}, None)
 
     if not args.continue_watching:
-        query = ui_system.create_prompt("Nome do anime", "Digite o nome do anime e pressione Enter.") if args.anime == None else args.anime   
-        rep.search_anime(query, args.debug)
+        query = (input("Pesquise anime: ") if not args.query else args.query) if not args.debug else "eva"
+        rep.search_anime(query)
         titles = rep.get_anime_titles()
-        selected_anime = ui_system.create_fzf_menu(titles, msg="Escolha o Anime: ")
-
-        selected_anime = selected_anime.split(" - ")[0]
+        selected_anime = menu(titles, msg="Escolha o Anime.")
 
         rep.search_episodes(selected_anime)
         episode_list = rep.get_episode_list(selected_anime)
-        
+        selected_episode = menu(episode_list, msg="Escolha o episódio.")
+
+        episode_idx = episode_list.index(selected_episode)
+
         if not args.download:
-            selected_episode = ui_system.create_fzf_menu(episode_list, msg="Escolha o episódio: ")
-            episode_idx = episode_list.index(selected_episode) 
+            selected_episode : str = ui_system.create_fzf_menu(episode_list, msg="Escolha o episódio: ") if not args.continue_watching else None
+            episode_idx : int = episode_list.index(selected_episode)
+            timestamp = 0  
     else:
-        selected_anime, episode_idx = load_history()
+        selected_anime, episode_idx, timestamp = load_history(args.debug)
     
     num_episodes = len(rep.anime_episodes_urls[selected_anime][0][0])
+
+    num_episodes : int = len(rep.anime_episodes_urls[selected_anime][0][0])
     
     if args.download:
         return download_anime(selected_anime, rep.anime_episodes_urls[selected_anime][0][0], args.range, args.debug)
+    
+    video_player = MPV(args.debug)
     while True:
-        episode = episode_idx + 1
-        player_url = rep.search_player(selected_anime, episode)
-        if args.debug: print(player_url)
-        play_video(player_url, args.debug)
-        save_history(selected_anime, episode_idx)
+        episode : int = episode_idx + 1
+        player_url : str = rep.search_player(selected_anime, episode)
 
-        opts = []
+        if args.debug: ui_system.print_log(f"URL encontrada: {player_url}", "DEBUG", "gray")        
+        video_player.play(player_url, timestamp=timestamp)
+        
+        while video_player.get_property("filename") is None:
+            if args.debug: ui_system.print_log("Esperando mpv carregar o episódio", "DEBUG", "gray")
+            time.sleep(0.5)
+
+        timestamp = 0
+
+        while True:
+            try:
+                if video_player.get_property("filename") is None:
+                    if args.debug: ui_system.print_log("filename é None, saindo", "DEBUG", "gray")
+                    break  # nada tocando, sai do loop
+
+                timestamp = video_player.get_property("time-pos")
+                # salvar timestamp no histórico aqui
+                if args.debug: ui_system.print_log(f"salvando timestamp: {timestamp}", "DEBUG", "gray")
+
+            except Exception as err:
+                if args.debug: ui_system.print_log(str(err.args), "DEBUG", "gray")
+                break  # socket fechado ou erro, sair limpo
+
+            time.sleep(1)
+
+        opts = ["Marcar como assistido e sair"]
         if episode_idx < num_episodes - 1:
             opts.append("Próximo")
         if episode_idx > 0:
             opts.append("Anterior")
 
-        selected_opt = ui_system.create_fzf_menu(opts, msg="O que quer fazer agora? > ")
+        selected_opt : str = ui_system.create_fzf_menu(opts, msg="O que quer fazer agora? > ", return_null_when_stopped=True)
+
+        save_history(selected_anime, episode_idx, args.debug, timestamp)
 
         if selected_opt == "Próximo":
             episode_idx += 1 
         elif selected_opt == "Anterior":
             episode_idx -= 1
+        elif selected_opt == "Marcar como assistido e sair":
+            save_history(selected_anime, episode_idx + 1, args.debug)
+            break
+        else:
+            break
 
-def download_anime(selected_anime,episode_list,download_range, debug):
+    video_player.force_quit()
+
+
+def download_anime(selected_anime : str,episode_list : list[str],download_range : list[int] | None, debug : bool) -> None:
     if debug: ui_system.print_log(f"Verificando uso de Range: {download_range}", "DEBUG", "gray")
     if download_range:
         if debug: ui_system.print_log(f"Aplicando range {download_range}", "DEBUG", "gray")
         episode_list = filter_list_based_in_rangetype(download_range,episode_list)
         if debug: ui_system.print_log(f"nova lista de episódios: {episode_list}", "DEBUG", "gray")
-
-
-    videos_path = ui_system.create_prompt("Diretório do episódio", "Determine o diretório raíz para o episódio (padrão: ~/Videos/)")
-    videos_path = Path(videos_path).expanduser() if videos_path != ""  else Path("~/Videos/").expanduser()
+    
+    root_path : str = ui_system.create_prompt("Diretório do episódio", "Determine o diretório raíz para o episódio (padrão: ~/Videos/)")
+    videos_path : Path = Path(root_path).expanduser() if root_path != ""  else Path("~/Videos/").expanduser()
 
     if debug: ui_system.print_log(f"Arquivo raíz: {videos_path.as_posix()}", "DEBUG", "gray")
 
@@ -78,11 +123,11 @@ def download_anime(selected_anime,episode_list,download_range, debug):
         ui_system.print_log("Não é uma pasta, usando diretório padrão", "WARN", "yellow")
         videos_path = Path.home() / "Videos"
 
-    anime_path = videos_path / selected_anime
+    anime_path : Path = videos_path / selected_anime
     if debug: ui_system.print_log(f"Criando pasta '{anime_path.as_posix()}'", "DEBUG", "gray")
 
     if anime_path.is_dir():
-        choice = ui_system.create_prompt("Anime já baixado", "O anime possívelmente já foi baixado, deseja *excluir* a pasta ou *parar* o processo?")
+        choice : str = ui_system.create_prompt("Anime já baixado", "O anime possívelmente já foi baixado, deseja *excluir* a pasta ou *parar* o processo?")
 
         if choice.lower() == "excluir":
             shutil.rmtree(anime_path.as_posix())
@@ -95,21 +140,20 @@ def download_anime(selected_anime,episode_list,download_range, debug):
 
     for i,episode in enumerate(episode_list,start=1):
         ui_system.print_log(f"baixando episódio {i}", "INFO", "white")
-        player_url = rep.search_player(selected_anime, i)
-
+        player_url : str = rep.search_player(selected_anime, i)
         download_episode(player_url, anime_path, f"Episódio {i}", debug)
 
-def download_episode(player_url, anime_path, name, debug):
-    episode_path = anime_path / (name + ".mp4")
+def download_episode(player_url : str, anime_path : Path, name : str, debug : bool) -> None:
+    episode_path : Path = anime_path / (name + ".mp4")
     # verificar o tipo do link (stream ou vídeo)
     if debug: ui_system.print_log(f"Fazendo request em {player_url}", "DEBUG", "gray")
-    response = requests.get(player_url)
-    content_type = response.headers.get("content-type")
+    response : requests.Response = requests.get(player_url)
+    content_type : str = response.headers.get("content-type")
     if debug: ui_system.print_log(f"Content-Type: {content_type.split(';')}", "DEBUG", "gray")
     try:
         if not content_type.split(";")[0] == "video/mp4":
             if debug: ui_system.print_log(f"Processando com yt_dlp", "DEBUG", "gray")
-            process = subprocess.run([
+            process : subprocess.CompletedProcess = subprocess.run([
             "yt-dlp", 
             "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]", 
             player_url, 
@@ -118,7 +162,7 @@ def download_episode(player_url, anime_path, name, debug):
             process.check_returncode()
         else:
             if debug: ui_system.print_log(f"Processando com FFmpeg", "DEBUG", "gray")
-            process =subprocess.run([
+            process : subprocess.CompletedProcess =subprocess.run([
             "ffmpeg",
             "-i", player_url,
             "-c", "copy",
@@ -127,63 +171,133 @@ def download_episode(player_url, anime_path, name, debug):
             process.check_returncode()
     except FileNotFoundError:
         ui_system.print_log("FFmpeg e yt_dlp não encontrados no $PATH, você baixou eles?", "ERRO", "red")
+        exit(1)
     except subprocess.CalledProcessError:
         ui_system.print_log("Houve um erro durante o processo de download do episódio", "ERRO", "red")
-        decide = input("Deseja abortar o programa? (S/n)")
-        exit(1) if not decide.lower() == "n" else None 
+        exit(1)
+        decide : str = input("Deseja abortar o programa? (S/n)")
+        if not decide.lower() == "n":
+            raise KeyboardInterrupt() 
 
-def load_history():
-    file_path = HISTORY_PATH + "history.json"
+from json import load, JSONDecodeError
+from pathlib import Path
+
+def load_history(debug: bool):
+    file_path = Path(HISTORY_PATH) / "history.json"
+
     try:
-        with open(file_path, "r") as f:
+        with file_path.open("r", encoding="utf-8") as f:
             data = load(f)
-            titles = dict()
-            for entry, info in data.items():
-                ep_info = f" (Ultimo episódio assistido {info[1] + 1})"
-                titles[entry + ep_info] = len(ep_info)
-            selected = ui_system.create_fzf_menu(list(titles.keys()), msg="Continue assistindo.")
-            anime = selected[:-titles[selected]]
-            episode_idx = data[anime][1]
-            rep.anime_episodes_urls[anime] = data[anime][0]
-        return anime, episode_idx
     except FileNotFoundError:
-        print("Sem histórico de animes")
-        exit()
+        ui_system.print_log(
+            "Sem histórico de animes, assista ao menos um para criar histórico.",
+            "ERRO",
+            "red"
+        )
+        return None, None, None
+    except JSONDecodeError as e:
+        if debug:
+            ui_system.print_log(f"JSON inválido: {e}", "DEBUG", "gray")
+        ui_system.print_log(
+            f"Histórico corrompido: {file_path.as_posix()}",
+            "ERRO",
+            "red"
+        )
+        return None, None, None
     except PermissionError:
-        print("Sem permissão para ler arquivos.")
+        ui_system.print_log(
+            f"Sem permissão para ler {file_path.as_posix()}",
+            "ERRO",
+            "red"
+        )
+        return None, None, None
+
+    if not isinstance(data, dict):
+        ui_system.print_log(
+            "Histórico inválido: formato raiz não é dict",
+            "ERRO",
+            "red"
+        )
+        return None, None, None
+
+    titles = {}
+    index_map = {}
+
+    for anime, info in data.items():
+        try:
+            ep_number = info["episode"]["number"]
+            timestamp = info["episode"]["timestamp"]
+            urls = info["urls"]
+        except (KeyError, TypeError):
+            if debug:
+                ui_system.print_log(
+                    f"Entrada inválida ignorada no histórico: {anime}",
+                    "DEBUG",
+                    "gray"
+                )
+            continue
+
+        ep_info = f" - Último episódio assistido {ep_number + 1} ({seconds_to_hms(timestamp)})"
+        label = anime + ep_info
+
+        titles[label] = len(ep_info)
+        index_map[label] = (anime, ep_number, timestamp, urls)
+
+    if not titles:
+        ui_system.print_log(
+            "Histórico vazio ou sem entradas válidas.",
+            "ERRO",
+            "red"
+        )
+        return None, None, None
+
+    selected = ui_system.create_fzf_menu(
+        list(titles.keys()),
+        msg="Continue assistindo."
+    )
+
+    anime, episode_idx, timestamp, urls = index_map[selected]
+
+    # ⚠️ EFEITO COLATERAL NECESSÁRIO
+    rep.anime_episodes_urls[anime] = urls
+
+    return anime, episode_idx, timestamp
+
+def save_history(anime : str, episode : int, debug : bool, timestamp=0) -> None:
+    file_path = Path(HISTORY_PATH) / "history.json"
+
+    if not file_path.is_file():
+       file_path.parent.mkdir(parents=True, exist_ok=True)
+       file_path.touch()
+
+    try:
+        with file_path.open("r", encoding="utf-8") as f:
+            data = load(f)
+    except JSONDecodeError as error:
+        if debug: ui_system.print_log(f"Houve um erro de Decodificação de JSON: {error.msg}", "DEBUG", "gray")
+        
+        data = {}
+    except PermissionError:
+        ui_system.print_log(f"Não foi possível salvar o histórico: Sem permissão para ler {file_path.as_posix()}", "ERROR", "red")
         return
 
-def save_history(anime, episode):
-    file_path = HISTORY_PATH + "history.json"
+    data[anime] = {"episode": {"number": episode, "timestamp": timestamp}, "urls": rep.anime_episodes_urls[anime]}
+
     try:
-        with open(file_path, "r+") as f:
-            data = load(f)
-            data[anime] = [rep.anime_episodes_urls[anime],
-                           episode]
-        with open(file_path , "w") as f:
-            dump(data, f)
-
-    except FileNotFoundError:
-        Path(file_path).mkdir(parents=True, exist_ok=True)
-
-        with open(file_path, "w") as f:
-            data = dict()
-            data[anime] = [rep.anime_episodes_urls[anime],
-                            episode]
-            dump(data, f)
-
+        with file_path.open("w", encoding="utf-8") as f:
+            dump(data,f, indent=4)
     except PermissionError:
-        print("Não há permissão para criar arquivos.")
-        return
+        print(f"Não foi possível salvar o histórico: Sem permissão para escrever {file_path.as_posix()}")
 
-def to_rangetype(rangestr):
+
+def to_rangetype(rangestr : str) -> list[int]:
     range_list = rangestr.split("-")
     return [int(range_list[0]),int(range_list[1])]
 
-def filter_list_based_in_rangetype(rangetype,x_list):
+def filter_list_based_in_rangetype(rangetype : list[int],x_list : list) -> list:
     return [episode for x, episode in enumerate(x_list,start=0) if rangetype[0]-1 <= x <= rangetype[1]-1]
 
-def recognize_rangetype(rangestr):
+def recognize_rangetype(rangestr : str) -> list[int]:
     range_list = rangestr.split("-")
     try:
         min_val = int(range_list[0])
@@ -194,6 +308,9 @@ def recognize_rangetype(rangestr):
         raise argparse.ArgumentTypeError("Range está incorreto. O certo é 'começo-fim' (exemplo: '10-20', '1-12', etc)")
 
     return to_rangetype(rangestr)
+
+def filter_non_dubbed_anime_list(anime_list : list[str]) -> list[str]:
+    pass
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(
@@ -206,6 +323,7 @@ if __name__=="__main__":
     parser.add_argument("anime", type=str, nargs="?", help="nome do anime com aspas")
     parser.add_argument("--download", "-d", action="store_true", help="Ativa modo de download")
     parser.add_argument("--range", "-r", type=recognize_rangetype, help="Intervalos de episódios a serem baixados ('1-10', '5-12', etc)")
+    parser.add_argument("--dubbed", "-dub", action="store_true")
     args = parser.parse_args()
     
     if args.debug:ui_system.print_log(f"Argumentos: {str(args)}", "DEBUG", "gray")

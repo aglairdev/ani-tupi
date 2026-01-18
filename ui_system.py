@@ -5,7 +5,7 @@ from rich.console import Console
 
 console = Console()
 
-def create_fzf_menu(options : list[str], msg : str) -> str:
+def create_fzf_menu(options : list[str], msg : str, return_null_when_stopped=False) -> str:
     options.append("Sair")
     proc = subprocess.run([
         "fzf", 
@@ -19,7 +19,7 @@ def create_fzf_menu(options : list[str], msg : str) -> str:
     selected = proc.stdout.strip()
 
     if selected == "Sair":
-        sys.exit(0)
+        return sys.exit(0) if not return_null_when_stopped else ""
     
     return selected
 

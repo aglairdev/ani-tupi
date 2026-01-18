@@ -19,7 +19,7 @@ class AnimesOnlineCC(PluginInterface):
     @staticmethod
     def search_anime(query, debug):
 
-        url = "https://animesonlinecc.to/search/" + "+".join(query.split())
+        url = "https://animesonlinecc.to/search/" + "+".join(query.lower().split())
         html_content = requests.get(url)
         soup = BeautifulSoup(html_content.text, 'html.parser')
         divs = soup.find_all('div', class_='data')
