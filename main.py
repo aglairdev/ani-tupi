@@ -1,5 +1,4 @@
 import loader, argparse
-from menu import menu
 from repository import rep
 from loader import PluginInterface
 from sys import exit
@@ -18,7 +17,7 @@ def seconds_to_hms(seconds):
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-# Exemplo
+
 
 HISTORY_PATH = Path.home().as_posix() + "/.local/state/ani-tupi/" if name != 'nt' else "C:\\Program Files\\ani-tupi\\"
 
@@ -29,14 +28,16 @@ def main(args : argparse.Namespace) -> None:
     loader.load_plugins({"pt-br"}, None)
 
     if not args.continue_watching:
-        query = (input("Pesquise anime: ") if not args.query else args.query) if not args.debug else "eva"
+        query = ui_system.create_prompt("Pesquisar animes", "coloque o nome do anime e pressione Enter") if not args.anime else args.anime
         rep.search_anime(query)
         titles = rep.get_anime_titles()
-        selected_anime = menu(titles, msg="Escolha o Anime.")
+        selected_anime = ui_system.create_fzf_menu(titles, msg="Escolha o Anime.")
+
+        selected_anime = selected_anime.split(" - ")[0]
 
         rep.search_episodes(selected_anime)
         episode_list = rep.get_episode_list(selected_anime)
-        selected_episode = menu(episode_list, msg="Escolha o episódio.")
+        selected_episode = ui_system.create_fzf_menu(episode_list, msg="Escolha o episódio.")
 
         episode_idx = episode_list.index(selected_episode)
 
