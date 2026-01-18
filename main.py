@@ -55,12 +55,15 @@ def main(args : argparse.Namespace) -> None:
     if args.download:
         return download_anime(selected_anime, rep.anime_episodes_urls[selected_anime][0][0], args.range, args.debug)
     
-    video_player = MPV(args.debug)
+    
     while True:
         episode : int = episode_idx + 1
         player_url : str = rep.search_player(selected_anime, episode)
 
         if args.debug: ui_system.print_log(f"URL encontrada: {player_url}", "DEBUG", "gray")        
+
+        video_player = MPV(args.debug)
+
         video_player.play(player_url, timestamp=timestamp)
         
         while video_player.get_property("filename") is None:
@@ -94,6 +97,7 @@ def main(args : argparse.Namespace) -> None:
         selected_opt : str = ui_system.create_fzf_menu(opts, msg="O que quer fazer agora? > ", return_null_when_stopped=True)
 
         save_history(selected_anime, episode_idx, args.debug, timestamp)
+        timestamp = 0
 
         if selected_opt == "Próximo":
             episode_idx += 1 
