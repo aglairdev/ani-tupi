@@ -189,9 +189,6 @@ def download_episode(player_url : str, anime_path : Path, name : str, debug : bo
         if not decide.lower() == "n":
             raise KeyboardInterrupt() 
 
-from json import load, JSONDecodeError
-from pathlib import Path
-
 def load_history(debug: bool):
     file_path = Path(HISTORY_PATH) / "history.json"
 
