@@ -9,7 +9,9 @@ from pathlib import Path
 import shutil, requests
 import subprocess, time
 import ui_system
-from video_player import MPV
+from python_mpv_jsonipc import MPV, MPVError
+from rich.live import Live
+from rich.panel import Panel
 
 def seconds_to_hms(seconds):
     hours = int(seconds // 3600)
@@ -27,6 +29,7 @@ def player_log_handler(text : str) -> None:
 def main(args : argparse.Namespace) -> None:
     loader.load_plugins({"pt-br"}, None)
 
+    # Busca anime / Procura do histórico
     if not args.continue_watching:
         query = ui_system.create_prompt("Pesquisar animes", "coloque o nome do anime e pressione Enter") if not args.anime else args.anime
         rep.search_anime(query)
@@ -37,9 +40,7 @@ def main(args : argparse.Namespace) -> None:
 
         rep.search_episodes(selected_anime)
         episode_list = rep.get_episode_list(selected_anime)
-        selected_episode = ui_system.create_fzf_menu(episode_list, msg="Escolha o episódio.")
 
-        episode_idx = episode_list.index(selected_episode)
 
         if not args.download:
             selected_episode : str = ui_system.create_fzf_menu(episode_list, msg="Escolha o episódio: ") if not args.continue_watching else None
@@ -52,41 +53,47 @@ def main(args : argparse.Namespace) -> None:
 
     num_episodes : int = len(rep.anime_episodes_urls[selected_anime][0][0])
     
+
+    # Começa processo de download se usuário pedir
+
     if args.download:
         return download_anime(selected_anime, rep.anime_episodes_urls[selected_anime][0][0], args.range, args.debug)
-    
+
+
+
+    # Loop para tocar os videos
     
     while True:
+        video_player = MPV()
+
         episode : int = episode_idx + 1
         player_url : str = rep.search_player(selected_anime, episode)
 
         if args.debug: ui_system.print_log(f"URL encontrada: {player_url}", "DEBUG", "gray")        
 
-        video_player = MPV(args.debug)
-
-        video_player.play(player_url, timestamp=timestamp)
+        video_player.play(player_url)
+        video_player.wait_for_property("time-pos")
         
-        while video_player.get_property("filename") is None:
-            if args.debug: ui_system.print_log("Esperando mpv carregar o episódio", "DEBUG", "gray")
-            time.sleep(0.5)
+        if timestamp >= 1:
+            video_player.seek(timestamp, "absolute")
 
-        timestamp = 0
+        with Live(refresh_per_second=4) as live:
+            pool_observer = 0
+            while video_player.eof_reached == False:
+                try:
+                    # Atualizando status
+                    timestamp = video_player.time_pos if video_player.time_pos is not None else timestamp
+                    duration = video_player.duration if video_player.duration is not None else 0
 
-        while True:
-            try:
-                if video_player.get_property("filename") is None:
-                    if args.debug: ui_system.print_log("filename é None, saindo", "DEBUG", "gray")
-                    break  # nada tocando, sai do loop
+                    conteúdo = f"Episódio {episode} tocando: [bold cyan]{seconds_to_hms(timestamp)}/{seconds_to_hms(duration)}s[/]"
+                    pool_observer += 1
+                    if pool_observer >= 100:
+                        live.update(Panel(conteúdo, title="Status do Player"))
+                        pool_observer = 0
+                except Exception as err:
+                    if args.debug: ui_system.print_log(str(err.args), "DEBUG", "gray")
+                    break
 
-                timestamp = video_player.get_property("time-pos")
-                # salvar timestamp no histórico aqui
-                if args.debug: ui_system.print_log(f"salvando timestamp: {timestamp}", "DEBUG", "gray")
-
-            except Exception as err:
-                if args.debug: ui_system.print_log(str(err.args), "DEBUG", "gray")
-                break  # socket fechado ou erro, sair limpo
-
-            time.sleep(1)
 
         opts = ["Marcar como assistido e sair"]
         if episode_idx < num_episodes - 1:
@@ -104,12 +111,10 @@ def main(args : argparse.Namespace) -> None:
         elif selected_opt == "Anterior":
             episode_idx -= 1
         elif selected_opt == "Marcar como assistido e sair":
-            save_history(selected_anime, episode_idx + 1, args.debug)
+            save_history(selected_anime, episode_idx + (1 if "Proximo" in opts else 0), args.debug)
             break
         else:
             break
-
-    video_player.force_quit()
 
 
 def download_anime(selected_anime : str,episode_list : list[str],download_range : list[int] | None, debug : bool) -> None:
@@ -234,11 +239,10 @@ def load_history(debug: bool):
             timestamp = info["episode"]["timestamp"]
             urls = info["urls"]
         except (KeyError, TypeError):
-            if debug:
-                ui_system.print_log(
+            ui_system.print_log(
                     f"Entrada inválida ignorada no histórico: {anime}",
-                    "DEBUG",
-                    "gray"
+                    "ERRO",
+                    "red"
                 )
             continue
 
@@ -263,7 +267,6 @@ def load_history(debug: bool):
 
     anime, episode_idx, timestamp, urls = index_map[selected]
 
-    # ⚠️ EFEITO COLATERAL NECESSÁRIO
     rep.anime_episodes_urls[anime] = urls
 
     return anime, episode_idx, timestamp
