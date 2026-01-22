@@ -1,9 +1,13 @@
-add watch lists
-study pytermgui
-study python-mpv
-gemini or llama for recommendation system
-add manga-tupi
-improve model with Cython
+- Ani-tupi
+    Melhorar gerenciamento do histórico
+    Adicionar --dubbed flag (seleciona apenas animes que possuam "Dublado" nos títulos)
+    Sistema de comunicação MPV via JSON IPC
+    Atalhos MPV + MPRIS para melhor gerenciamento de lista de anime (próximo, anterior, fechar, etc)
+    Pesquisar métodos melhorados para downloading
+    Gerenciamento de erros / debugging + Gerenciamento do ani-tupi em modo de vídeo + download
+
+- manga-tupi
+Fazer ele funcionar e ver o que se pode Fazer
 
 user <-> TUI (view) <- controler (main) <- model (repository) <-> plugins (scrapers or api)
 (MVCP)
