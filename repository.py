@@ -6,7 +6,7 @@ from collections import defaultdict
 from threading import Thread, Condition
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.pool import ThreadPool
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 
 
 class Repository:
