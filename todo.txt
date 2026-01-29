@@ -1,16 +1,4 @@
-- Ani-tupi
-    Melhorar gerenciamento do histórico
-    Adicionar --dubbed flag (seleciona apenas animes que possuam "Dublado" nos títulos)
-    Sistema de comunicação MPV via JSON IPC
-    Atalhos MPV + MPRIS para melhor gerenciamento de lista de anime (próximo, anterior, fechar, etc)
-    Pesquisar métodos melhorados para downloading
-    Gerenciamento de erros / debugging + Gerenciamento do ani-tupi em modo de vídeo + download
-
-- manga-tupi
-Fazer ele funcionar e ver o que se pode Fazer
-
-user <-> TUI (view) <- controler (main) <- model (repository) <-> plugins (scrapers or api)
-(MVCP)
-
-
-
+- Compatibilidade Python 3.14
+    [x] RapidFuzz no lugar do fuzzywuzzy
+    [x] Atualizar PyInstaller para >=6.18.0
+    [x] Fixar urllib3 em 1.26.20 (pyppeteer)
