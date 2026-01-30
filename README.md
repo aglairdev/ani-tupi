@@ -14,7 +14,7 @@ sudo apt install git python3 mpv firefox yt-dlp ffmpeg fzf
 ## Compilação
 bash/zsh:
 ```sh
-git clone https://github.com/luisAntony103/ani-tupi
+git clone -b python-3.14 https://github.com/aglairdev/ani-tupi.git
 cd ani-tupi
 python -m venv .venv
 source ./venv/bin/activate  # fish: source ./venv/bin/activate.fish 
