@@ -11,7 +11,7 @@ import subprocess, time
 import ui_system
 from python_mpv_jsonipc import MPV, MPVError
 from rich.live import Live
-from rich.panel import Panel
+from rich.text import Text
 
 def seconds_to_hms(seconds):
     hours = int(seconds // 3600)
@@ -72,38 +72,49 @@ def main(args : argparse.Namespace) -> None:
         if args.debug: ui_system.print_log(f"URL encontrada: {player_url}", "DEBUG", "gray")        
 
         video_player.play(player_url)
-        video_player.wait_for_property("time-pos")
+        
+        while video_player.time_pos == None and video_player.duration == None:
+            time.sleep(.1)
         
         if timestamp >= 1:
             video_player.seek(timestamp, "absolute")
+        try:
+            # Eventos com comandos que vão disparar erros :)
 
-        with Live(refresh_per_second=4) as live:
-            pool_observer = 0
-            while video_player.eof_reached == False:
-                try:
-                    # Atualizando status
-                    timestamp = video_player.time_pos if video_player.time_pos is not None else timestamp
-                    duration = video_player.duration if video_player.duration is not None else 0
+            
 
-                    conteúdo = f"Episódio {episode} tocando: [bold cyan]{seconds_to_hms(timestamp)}/{seconds_to_hms(duration)}s[/]"
-                    pool_observer += 1
-                    if pool_observer >= 100:
-                        live.update(Panel(conteúdo, title="Status do Player"))
-                        pool_observer = 0
-                except Exception as err:
-                    if args.debug: ui_system.print_log(str(err.args), "DEBUG", "gray")
-                    break
+            with Live(refresh_per_second=4) as live:
+                while video_player.eof_reached == False:
+                    try:
+                       # Atualizando status
+                        if video_player.time_pos != None and video_player.duration != None:
+                            timestamp = video_player.time_pos
+                            duration = video_player.duration
+                        conteúdo = f"[AniTupi] Episódio {episode} tocando: {seconds_to_hms(timestamp)}/{seconds_to_hms(duration)}s"
+                        live.update(Text(conteúdo, style="bold cyan"))
+                        time.sleep(1)
+                    except Exception as err:
+                        if args.debug: ui_system.print_log(str(err.args) + " <- Dentro do loop do MPV", "DEBUG", "gray")
+                        break
+                            
+        except ConnectionResetError:
+            if args.debug: ui_system.print_log("MPV morreu", "DEBUG", "gray")
+        except Exception as err:
+            if args.debug: ui_system.print_log(str(err.args) + "<- Fora do loop do MPV", "DEBUG", "gray")
+            # Uso futuro para Comandos de mídia.
 
 
-        opts = ["Marcar como assistido e sair"]
+        opts = []
         if episode_idx < num_episodes - 1:
             opts.append("Próximo")
+            opts.append("Marcar como assistido e sair")
         if episode_idx > 0:
             opts.append("Anterior")
 
+        save_history(selected_anime, episode_idx, args.debug, timestamp)
+
         selected_opt : str = ui_system.create_fzf_menu(opts, msg="O que quer fazer agora? > ", return_null_when_stopped=True)
 
-        save_history(selected_anime, episode_idx, args.debug, timestamp)
         timestamp = 0
 
         if selected_opt == "Próximo":
@@ -111,7 +122,7 @@ def main(args : argparse.Namespace) -> None:
         elif selected_opt == "Anterior":
             episode_idx -= 1
         elif selected_opt == "Marcar como assistido e sair":
-            save_history(selected_anime, episode_idx + (1 if "Proximo" in opts else 0), args.debug)
+            save_history(selected_anime, episode_idx + 1, args.debug)
             break
         else:
             break
@@ -268,9 +279,15 @@ def load_history(debug: bool):
 
     return anime, episode_idx, timestamp
 
-def save_history(anime : str, episode : int, debug : bool, timestamp=0) -> None:
+def save_history(anime : str, episode : int, debug : bool, timestamp : int) -> None:
     file_path = Path(HISTORY_PATH) / "history.json"
-
+    if debug: ui_system.print_log(f"Salvando alterações: {anime}, tempo onde parou: {timestamp}", "DEBUG", "gray")
+        
+    if timestamp == None:
+        ui_system.print_log("Não foi possível salvar tempo onde parou", "ERRO", "red")
+        ui_system.print_log("Motivo: timestamp retorna None", "DEBUG", "gray")
+        timestamp = 0
+    
     if not file_path.is_file():
        file_path.parent.mkdir(parents=True, exist_ok=True)
        file_path.touch()
@@ -280,10 +297,10 @@ def save_history(anime : str, episode : int, debug : bool, timestamp=0) -> None:
             data = load(f)
     except JSONDecodeError as error:
         if debug: ui_system.print_log(f"Houve um erro de Decodificação de JSON: {error.msg}", "DEBUG", "gray")
-        
+        ui_system.print_log("Houve um erro de decodificação de JSON, considerando histórico vazio", "ERRO", "gray")
         data = {}
     except PermissionError:
-        ui_system.print_log(f"Não foi possível salvar o histórico: Sem permissão para ler {file_path.as_posix()}", "ERROR", "red")
+        ui_system.print_log(f"Não foi possível salvar o histórico: Sem permissão para ler {file_path.as_posix()}", "ERRO", "red")
         return
 
     data[anime] = {"episode": {"number": episode, "timestamp": timestamp}, "urls": rep.anime_episodes_urls[anime]}
