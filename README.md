@@ -2,7 +2,9 @@
 
 ## Demo
 
-[demo-anitupi](https://github.com/user-attachments/assets/56ddf231-4974-41ff-9b3d-425aaed5ca72)
+[demo-anitupi](https://github.com/user-attachments/assets/bd4d1011-3fed-49c1-ab02-b21d3e98cc3b)
+
+[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000.svg?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=t_PWtRqb19o)
 
 ## Sobre
 
