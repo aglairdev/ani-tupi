@@ -23,7 +23,7 @@ git python3 mpv firefox yt-dlp ffmpeg fzf curl
 ## Instalação
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/aglairdev/ani-tupi/python-3.14/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/aglairdev/ani-tupi/main/install.sh | bash
 ```
 
 ## Execução

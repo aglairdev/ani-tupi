@@ -54,10 +54,10 @@ mkdir -p "$bin_dir"
 
 if [ -d "$install_dir" ]; then
     echo "atualizando repositório..."
-    cd "$install_dir" && git pull origin python-3.14 &> /dev/null
+    cd "$install_dir" && git pull origin main &> /dev/null
 else
-    echo "clonando arquivos (branch python-3.14)..."
-    git clone -b python-3.14 https://github.com/aglairdev/ani-tupi.git "$install_dir" &> /dev/null
+    echo "Baixando arquivos ..."
+    git clone -b main https://github.com/aglairdev/ani-tupi.git "$install_dir" &> /dev/null
 fi
 
 cd "$install_dir"
